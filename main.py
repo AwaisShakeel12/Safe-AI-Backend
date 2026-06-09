@@ -146,27 +146,38 @@ def analyze_node(state: SafetyState):
     transcript = state["transcript"]
 
     prompt = f"""
-You are a personal safety AI.
+You are an AI safety analyst.
 
-Analyze this transcript.
+Analyze the following transcript for signs of danger.
 
 Transcript:
 {transcript}
 
-Classify into:
+Return ONLY a JSON object.
 
+DO NOT include explanations.
+DO NOT include markdown.
+DO NOT include ```json blocks.
+
+Valid risk levels:
 LOW
 MEDIUM
 HIGH
 
-Return ONLY valid JSON.
-
-Example:
+Return exactly this format:
 
 {{
     "risk_level":"HIGH",
-    "reason":"User appears in danger",
+    "reason":"short explanation",
     "action":"email"
+}}
+
+If there is no danger:
+
+{{
+    "risk_level":"LOW",
+    "reason":"No immediate threat detected",
+    "action":"none"
 }}
 """
 
@@ -174,7 +185,20 @@ Example:
 
     text = response.content.strip()
 
+    print("RAW GEMINI RESPONSE:")
+    print(text)
+
     try:
+
+        text = text.replace("```json", "")
+        text = text.replace("```", "")
+        text = text.strip()
+
+        start = text.find("{")
+        end = text.rfind("}") + 1
+
+        text = text[start:end]
+
         data = json.loads(text)
 
         state["risk_level"] = data.get(
@@ -192,7 +216,10 @@ Example:
             "none"
         )
 
-    except Exception:
+    except Exception as e:
+
+        print("JSON PARSE ERROR:", e)
+        print("GEMINI TEXT:", text)
 
         state["risk_level"] = "LOW"
         state["reason"] = "Could not parse Gemini response"
@@ -333,11 +360,12 @@ async def analyze_audio(
     if not should_run_ai:
 
         return {
-            "risk_level": "LOW",
-            "reason": "No danger keywords found",
-            "transcript": transcript,
-            "email_sent": False
-        }
+        "transcript": transcript,
+        "risk_level": "LOW",
+        "reason": "No danger keywords found",
+        "action": "none",
+        "email_sent": False
+    }
 
     # -----------------------------------
     # LANGGRAPH
