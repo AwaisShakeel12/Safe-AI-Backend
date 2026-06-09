@@ -22,8 +22,7 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 
 # ==========================================================
 # FASTAPI
@@ -287,6 +286,8 @@ def test_alert():
 # MAIN ENDPOINT
 # ==========================================================
 
+
+
 @app.post("/analyze-audio")
 async def analyze_audio(
     audio_file: UploadFile = File(...),
@@ -296,33 +297,23 @@ async def analyze_audio(
 ):
 
     # -----------------------------------
-    # SAVE AUDIO
+    # READ AUDIO DIRECTLY FROM MEMORY
     # -----------------------------------
 
-    file_path = os.path.join(
-        UPLOAD_DIR,
-        audio_file.filename
-    )
-
-    with open(file_path, "wb") as f:
-        f.write(await audio_file.read())
+    audio_bytes = await audio_file.read()
 
     # -----------------------------------
     # GROQ TRANSCRIPTION
     # -----------------------------------
 
-    with open(file_path, "rb") as audio:
-
-        transcription = (
-            groq_client.audio.transcriptions.create(
-                file=(
-                    file_path,
-                    audio.read()
-                ),
-                model="whisper-large-v3",
-                temperature=0
-            )
-        )
+    transcription = groq_client.audio.transcriptions.create(
+        file=(
+            audio_file.filename,
+            audio_bytes
+        ),
+        model="whisper-large-v3",
+        temperature=0
+    )
 
     transcript = transcription.text
 
@@ -335,7 +326,6 @@ async def analyze_audio(
     should_run_ai = False
 
     for keyword in DANGER_KEYWORDS:
-
         if keyword in transcript_lower:
             should_run_ai = True
             break
